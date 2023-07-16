@@ -23,25 +23,42 @@ app.get('/', (req, res) => {
 });
 
 app.post('/auth/register', registerValidation, async (req: Request, res: Response) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json(errors.array());
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json(errors.array());
+    }
+
+    const password = req.body.password;
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const doc = new UserModel({
+      email: req.body.email,
+      passwordHash,
+      fullname: req.body.fullname,
+      avatarUrl: req.body.avatarUrl,
+    });
+
+    const user = await doc.save();
+    const token = jwt.sign(
+      {
+        _id: user._id,
+      },
+      'secret123',
+      { expiresIn: '30d' },
+    );
+
+    return res.json({
+      user,
+      token,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      message: 'Registration failed',
+    });
   }
-
-  const password = req.body.password;
-  const salt = await bcrypt.genSalt(10);
-  const passwordHash = await bcrypt.hash(password, salt);
-
-  const doc = new UserModel({
-    email: req.body.email,
-    passwordHash,
-    fullName: req.body.fullName,
-    avatarUrl: req.body.avatarUrl,
-  });
-
-  const user = await doc.save();
-
-  return res.json(user);
 });
 
 app.listen(3333);
