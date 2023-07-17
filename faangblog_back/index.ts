@@ -18,10 +18,6 @@ mongoose
 const app = express();
 app.use(express.json());
 
-app.get('/', (req, res) => {
-  res.send('Hi');
-});
-
 app.post('/auth/register', registerValidation, async (req: Request, res: Response) => {
   try {
     const errors = validationResult(req);
@@ -31,11 +27,11 @@ app.post('/auth/register', registerValidation, async (req: Request, res: Respons
 
     const password = req.body.password;
     const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
+    const hash = await bcrypt.hash(password, salt);
 
     const doc = new UserModel({
       email: req.body.email,
-      passwordHash,
+      hash,
       fullname: req.body.fullname,
       avatarUrl: req.body.avatarUrl,
     });
@@ -49,14 +45,56 @@ app.post('/auth/register', registerValidation, async (req: Request, res: Respons
       { expiresIn: '30d' },
     );
 
+    const { passwordHash, ...userData } = user;
+
     return res.json({
-      user,
+      ...userData,
       token,
     });
   } catch (error) {
     console.log(error);
     res.status(500).json({
       message: 'Registration failed',
+    });
+  }
+});
+
+app.post('/auth/login', async (req: Request, res: Response) => {
+  try {
+    const user = await UserModel.findOne({ email: req.body.email });
+
+    if (!user) {
+      return res.status(404).json({
+        message: 'User not found',
+      });
+    }
+
+    const isUserValid = bcrypt.compare(user.passwordHash, req.body.password);
+    if (!isUserValid) {
+      return res.status(400).json({
+        message: 'Incorrect login or password',
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        _id: user._id,
+      },
+      'secret123',
+      { expiresIn: '30d' },
+    );
+
+    const { passwordHash, ...userData } = user;
+    console.log({ ...userData });
+
+    return res.json({
+      ...userData,
+      token,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: 'Login failed',
     });
   }
 });
